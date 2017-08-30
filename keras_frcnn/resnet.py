@@ -200,7 +200,7 @@ def nn_base(input_tensor=None, trainable=False):
     return x
 
 
-def classifier_layers(x, input_shape, trainable=False):
+def classifier_layers(x, input_shape, trainable=True):
 
     # compile times on theano tend to be very high, so we use smaller ROI pooling regions to workaround
     # (hence a smaller stride in the region that follows the ROI pool)
@@ -225,7 +225,7 @@ def rpn(base_layers,num_anchors):
 
     return [x_class, x_regr, base_layers]
 
-def classifier(base_layers, input_rois, num_rois, nb_classes = 21, trainable=False):
+def classifier(base_layers, input_rois, num_rois, nb_classes=21, trainable=True):
 
     # compile times on theano tend to be very high, so we use smaller ROI pooling regions to workaround
 
@@ -241,8 +241,10 @@ def classifier(base_layers, input_rois, num_rois, nb_classes = 21, trainable=Fal
 
     out = TimeDistributed(Flatten())(out)
 
+    # classify over number of classes using softmax (note that background is also one of the classes)
     out_class = TimeDistributed(Dense(nb_classes, activation='softmax', kernel_initializer='zero'), name='dense_class_{}'.format(nb_classes))(out)
-    # note: no regression target for bg class
+
+    # note: no regression target for background class (hence 4*(nb_classes-1))
     out_regr = TimeDistributed(Dense(4 * (nb_classes-1), activation='linear', kernel_initializer='zero'), name='dense_regress_{}'.format(nb_classes))(out)
     return [out_class, out_regr]
 

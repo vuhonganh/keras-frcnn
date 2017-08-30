@@ -6,6 +6,7 @@ import time
 import numpy as np
 from optparse import OptionParser
 import pickle
+from termcolor import colored
 
 from keras import backend as K
 from keras.optimizers import Adam, SGD, RMSprop
@@ -29,7 +30,7 @@ parser.add_option("--hf", dest="horizontal_flips", help="Augment with horizontal
 parser.add_option("--vf", dest="vertical_flips", help="Augment with vertical flips in training. (Default=false).", action="store_true", default=False)
 parser.add_option("--rot", "--rot_90", dest="rot_90", help="Augment with 90 degree rotations in training. (Default=false).",
 				  action="store_true", default=False)
-parser.add_option("--num_epochs", dest="num_epochs", help="Number of epochs.", default=2000)
+parser.add_option("--num_epochs", dest="num_epochs", help="Number of epochs.", default=1)
 parser.add_option("--config_filename", dest="config_filename", help=
 				"Location to store all the metadata related to the training (to be used when testing).",
 				default="config.pickle")
@@ -50,8 +51,10 @@ else:
 
 # pass the settings from the command line, and persist them in the config object
 C = config.Config()
-
 C.use_horizontal_flips = bool(options.horizontal_flips)
+if C.use_horizontal_flips:
+	text = colored('augment by using horizontal flip', 'green')
+	print(text)
 C.use_vertical_flips = bool(options.vertical_flips)
 C.rot_90 = bool(options.rot_90)
 
@@ -119,7 +122,7 @@ img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(None, 4))
 
 # define the base network (resnet here, can be VGG, Inception, etc)
-shared_layers = nn.nn_base(img_input, trainable=True)
+shared_layers = nn.nn_base(img_input, trainable=False)  # transfer learning freeze these base layers
 
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
@@ -134,10 +137,13 @@ model_classifier = Model([img_input, roi_input], classifier)
 model_all = Model([img_input, roi_input], rpn[:2] + classifier)
 
 try:
-	print('loading weights from {}'.format(C.base_net_weights))
+	text = colored('loading weights from {}'.format(C.base_net_weights), 'green')
+	print(text)
 	model_rpn.load_weights(C.base_net_weights, by_name=True)
 	model_classifier.load_weights(C.base_net_weights, by_name=True)
 except:
+	text = colored('not found weights, sth wrong', 'red')
+	print (text)
 	print('Could not load pretrained model weights. Weights can be found in the keras application folder \
 		https://github.com/fchollet/keras/tree/master/keras/applications')
 
@@ -147,7 +153,7 @@ model_rpn.compile(optimizer=optimizer, loss=[losses.rpn_loss_cls(num_anchors), l
 model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss_cls, losses.class_loss_regr(len(classes_count)-1)], metrics={'dense_class_{}'.format(len(classes_count)): 'accuracy'})
 model_all.compile(optimizer='sgd', loss='mae')
 
-epoch_length = 1000
+epoch_length = len(train_imgs)
 num_epochs = int(options.num_epochs)
 iter_num = 0
 
@@ -268,7 +274,10 @@ for epoch_num in range(num_epochs):
 
 				if curr_loss < best_loss:
 					if C.verbose:
-						print('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
+						# print('Total loss decreased from {} to {}, saving weights'.format(best_loss,curr_loss))
+						text = colored('Total loss decreased from {} to {}, saving weights to {}'.format(best_loss,curr_loss, C.model_path), 'yellow')
+						print(text)
+
 					best_loss = curr_loss
 					model_all.save_weights(C.model_path)
 

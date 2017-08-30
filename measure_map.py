@@ -62,7 +62,7 @@ def get_map(pred, gt, f):
 		T[pred_class].append(int(found_match))
 
 	for gt_box in gt:
-		if not gt_box['bbox_matched'] and not gt_box['difficult']:
+		if not gt_box['bbox_matched']:  # and not gt_box['difficult']:
 			if gt_box['class'] not in P:
 				P[gt_box['class']] = []
 				T[gt_box['class']] = []
@@ -102,7 +102,7 @@ else:
 
 config_output_filename = options.config_filename
 
-with open(config_output_filename, 'r') as f_in:
+with open(config_output_filename, 'rb') as f_in:
 	C = pickle.load(f_in)
 
 # turn off any data augmentation at test time
@@ -144,7 +144,7 @@ class_mapping = C.class_mapping
 if 'bg' not in class_mapping:
 	class_mapping['bg'] = len(class_mapping)
 
-class_mapping = {v: k for k, v in class_mapping.iteritems()}
+class_mapping = {v: k for k, v in class_mapping.items()}
 print(class_mapping)
 class_to_color = {class_mapping[v]: np.random.randint(0, 255, 3) for v in class_mapping}
 C.num_rois = int(options.num_rois)
