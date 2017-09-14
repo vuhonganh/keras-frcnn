@@ -51,10 +51,12 @@ else:
 
 # pass the settings from the command line, and persist them in the config object
 C = config.Config()
+
 C.use_horizontal_flips = bool(options.horizontal_flips)
 if C.use_horizontal_flips:
 	text = colored('augment by using horizontal flip', 'green')
 	print(text)
+
 C.use_vertical_flips = bool(options.vertical_flips)
 C.rot_90 = bool(options.rot_90)
 
@@ -122,7 +124,7 @@ img_input = Input(shape=input_shape_img)
 roi_input = Input(shape=(None, 4))
 
 # define the base network (resnet here, can be VGG, Inception, etc)
-shared_layers = nn.nn_base(img_input, trainable=False)  # transfer learning freeze these base layers
+shared_layers = nn.nn_base(img_input, trainable=False)  # the base network should be fixed (transfer learning)
 
 # define the RPN, built on the base layers
 num_anchors = len(C.anchor_box_scales) * len(C.anchor_box_ratios)
@@ -154,6 +156,8 @@ model_classifier.compile(optimizer=optimizer_classifier, loss=[losses.class_loss
 model_all.compile(optimizer='sgd', loss='mae')
 
 epoch_length = len(train_imgs)
+# epoch_length = 100
+
 num_epochs = int(options.num_epochs)
 iter_num = 0
 
@@ -288,3 +292,4 @@ for epoch_num in range(num_epochs):
 			continue
 
 print('Training complete, exiting.')
+K.clear_session()

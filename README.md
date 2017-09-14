@@ -1,8 +1,8 @@
 # keras-frcnn
 Keras implementation of Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks.
 
-
 USAGE:
+- Create new virtual environment Python and install using pip and ./requirements.txt
 - Both theano and tensorflow backends are supported. However compile times are very high in theano, and tensorflow is highly recommended.
 - `train_frcnn.py` can be used to train a model. To train on Pascal VOC data, simply do:
 `python train_frcnn.py -p /path/to/pascalvoc/`. 
@@ -30,28 +30,12 @@ images:
 - Data augmentation can be applied by specifying `--hf` for horizontal flips, `--vf` for vertical flips and `--rot` for 90 degree rotations
 
 
-
 NOTES:
 - config.py contains all settings for the train or test run. The default settings match those in the original Faster-RCNN
 paper. The anchor box sizes are [128, 256, 512] and the ratios are [1:1, 1:2, 2:1].
 - The theano backend by default uses a 7x7 pooling region, instead of 14x14 as in the frcnn paper. This cuts down compiling time slightly.
 - The tensorflow backend performs a resize on the pooling region, instead of max pooling. This is much more efficient and has little impact on results.
-
-
-Example output:
-
-![ex1](http://i.imgur.com/7Lmb2RC.png)
-![ex2](http://i.imgur.com/h58kCIV.png)
-![ex3](http://i.imgur.com/EbvGBaG.png)
-![ex4](http://i.imgur.com/i5UAgLb.png)
-
-ISSUES:
-
-- If you get this error:
-`ValueError: There is a negative shape in the graph!`    
-    than update keras to the newest version
-
-- Make sure to use `python2`, not `python3`. If you get this error:
-`TypeError: unorderable types: dict() < dict()` you are using python3
-
-- If you run out of memory, try reducing the number of ROIs that are processed simultaneously. Try passing a lower `-n` to `train_frcnn.py`. Alternatively, try reducing the image size from the default value of 600 (this setting is found in `config.py`.
+- my_measure_map.py: implement the original MAP metric used in PASCAL VOC.
+- server.py: set up a server that receives each image, detects objects in it and returns the predicted one.
+- If you can not load pretrained weight  (such as Resnet50), please add weight file directly in this folder.
+- Tensorflow-gpu should be installed previously if you use gpu to train.

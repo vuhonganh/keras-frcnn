@@ -13,12 +13,16 @@ from keras.models import Model
 from keras_frcnn import roi_helpers
 from keras_frcnn import data_generators
 from sklearn.metrics import average_precision_score
-
+from termcolor import colored
 
 def get_map(pred, gt, f):
 	T = {}
 	P = {}
 	fx, fy = f
+	tp = {}  # true positive
+	fp = {}  # false positive
+	num_gt = {}  # number of ground truth box
+
 
 	for bbox in gt:
 		bbox['bbox_matched'] = False
@@ -26,22 +30,31 @@ def get_map(pred, gt, f):
 	pred_probs = np.array([s['prob'] for s in pred])
 	box_idx_sorted_by_prob = np.argsort(pred_probs)[::-1]
 
+	# for each predicted box in highest proba -> lowest proba
 	for box_idx in box_idx_sorted_by_prob:
 		pred_box = pred[box_idx]
-		pred_class = pred_box['class']
+		pred_class = pred_box['class']  # get the class
 		pred_x1 = pred_box['x1']
 		pred_x2 = pred_box['x2']
 		pred_y1 = pred_box['y1']
 		pred_y2 = pred_box['y2']
 		pred_prob = pred_box['prob']
+
 		if pred_class not in P:
 			P[pred_class] = []
 			T[pred_class] = []
-		P[pred_class].append(pred_prob)
+
+		P[pred_class].append(pred_prob)  # P is the probability list
+
 		found_match = False
 
 		for gt_box in gt:
 			gt_class = gt_box['class']
+			if gt_class not in num_gt:
+				num_gt[gt_class] = 1
+			else:
+				num_gt[gt_class] += 1
+
 			gt_x1 = gt_box['x1']/fx
 			gt_x2 = gt_box['x2']/fx
 			gt_y1 = gt_box['y1']/fy
@@ -59,7 +72,7 @@ def get_map(pred, gt, f):
 			else:
 				continue
 
-		T[pred_class].append(int(found_match))
+		T[pred_class].append(int(found_match))  # for each predicted box, T is the true label -> either True or False
 
 	for gt_box in gt:
 		if not gt_box['bbox_matched']:  # and not gt_box['difficult']:
@@ -128,13 +141,13 @@ def format_img(img, C):
 	fx = width/float(new_width)
 	fy = height/float(new_height)
 	img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-	img = img[:, :, (2, 1, 0)]
+	#img = img[:, :, (2, 1, 0)]  # mean channel is already in bgr, no need to switch
 	img = img.astype(np.float32)
 	img[:, :, 0] -= C.img_channel_mean[0]
 	img[:, :, 1] -= C.img_channel_mean[1]
 	img[:, :, 2] -= C.img_channel_mean[2]
 	img /= C.img_scaling_factor
-	img = np.transpose(img, (2, 0, 1))
+	img = np.transpose(img, (2, 0, 1))  # why put channels ahead of height, width? are we forced to use theano backend here?
 	img = np.expand_dims(img, axis=0)
 	return img, fx, fy
 
@@ -175,11 +188,15 @@ model_classifier_only = Model([feature_map_input, roi_input], classifier)
 
 model_classifier = Model([feature_map_input, roi_input], classifier)
 
+
+console_text = colored('Loading weights from {}'.format(C.model_path), 'green')
+print(console_text)
 model_rpn.load_weights(C.model_path, by_name=True)
 model_classifier.load_weights(C.model_path, by_name=True)
-
+model_classifier_only.load_weights(C.model_path, by_name=True)
 model_rpn.compile(optimizer='sgd', loss='mse')
 model_classifier.compile(optimizer='sgd', loss='mse')
+model_classifier_only.compile(optimizer='sgd', loss='mse')
 
 all_imgs, _, _ = get_data(options.test_path)
 test_imgs = [s for s in all_imgs if s['imageset'] == 'test']
@@ -187,6 +204,8 @@ test_imgs = [s for s in all_imgs if s['imageset'] == 'test']
 
 T = {}
 P = {}
+f_map = 0.0
+nb_test_imgs = len(test_imgs)
 for idx, img_data in enumerate(test_imgs):
 	print('{}/{}'.format(idx,len(test_imgs)))
 	st = time.time()
@@ -197,7 +216,7 @@ for idx, img_data in enumerate(test_imgs):
 	X, fx, fy = format_img(img, C)
 
 	if K.image_dim_ordering() == 'tf':
-		X = np.transpose(X, (0, 2, 3, 1))
+		X = np.transpose(X, (0, 2, 3, 1))  # revert back to tf order dim  # for god sake
 
 	# get the feature maps and output from the RPN
 	[Y1, Y2, F] = model_rpn.predict(X)
@@ -272,13 +291,57 @@ for idx, img_data in enumerate(test_imgs):
 		if key not in T:
 			T[key] = []
 			P[key] = []
-		T[key].extend(t[key])
-		P[key].extend(p[key])
+		T[key].extend(t[key])  # extend list
+		P[key].extend(p[key])  # extend list
 	all_aps = []
 	for key in T.keys():
 		ap = average_precision_score(T[key], P[key])
+		print(len(T[key]), len(P[key]))
+
 		print('{} AP: {}'.format(key, ap))
 		all_aps.append(ap)
-	print('mAP = {}'.format(np.mean(np.array(all_aps))))
+		if idx == 20:
+			print(T)
+			print(P)
+	f_map = np.mean(np.array(all_aps))
+	print('mAP = {}'.format(f_map))
+
 	#print(T)
 	#print(P)
+print('final map = %f' %f_map)
+K.clear_session()
+'''
+try_2.hdf5: run when subtract mean is wrong
+apple AP: 0.73097306846017
+book AP: 0.6204785504522348
+key AP: 0.763630009159516
+mouse AP: 0.6338905227842069
+keyboard AP: 0.699029345925161
+mug AP: 0.9303704945817407
+banana AP: 0.8678984979565814
+pen AP: 0.6666952192074225
+monitor AP: 0.609305861994794
+orange AP: 0.7713942797913516
+pear AP: 0.7070201070680253
+wallet AP: 0.811023698954641
+mAP = 0.734309138027987
+'''
+
+
+'''
+try_2.hdf5: run when subtract mean is correct
+mouse AP: 0.7048400140834797
+keyboard AP: 0.7463799426019226
+key AP: 0.816976336821863
+wallet AP: 0.8206272090507992
+apple AP: 0.8199179565556072
+book AP: 0.5682561889864521
+monitor AP: 0.6673109689340484
+pen AP: 0.6235062905360782
+banana AP: 0.6958752455693236
+orange AP: 0.8006453979922541
+mug AP: 0.9469288701960813
+pear AP: 0.7577159258716506
+mAP = 0.7474150289332967
+final map = 0.747415
+'''
